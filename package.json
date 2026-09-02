@@ -19,6 +19,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@fly-ai/flyai-cli": "^1.0.16",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.25.0",
     "next": "16.2.6",

@@ -4,8 +4,10 @@ import { mcpServers } from "@/db/schema";
 import { requireRequestUser } from "@/lib/auth/request-user";
 import { providerDefaults } from "./registry";
 import type { McpServerConfig } from "./types";
+
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
 async function key() {
   const localFallback =
     process.env.NODE_ENV !== "production"
@@ -21,6 +23,7 @@ async function key() {
     ["encrypt", "decrypt"],
   );
 }
+
 const b64 = (data: Uint8Array) =>
   btoa(String.fromCharCode(...data))
     .replaceAll("+", "-")
@@ -30,6 +33,7 @@ const unb64 = (data: string) =>
   Uint8Array.from(atob(data.replaceAll("-", "+").replaceAll("_", "/")), (c) =>
     c.charCodeAt(0),
   );
+
 export async function encryptSecret(value?: string) {
   if (!value) return null;
   const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -40,6 +44,7 @@ export async function encryptSecret(value?: string) {
   );
   return `${b64(iv)}.${b64(new Uint8Array(encrypted))}`;
 }
+
 export async function decryptSecret(value?: string | null) {
   if (!value) return "";
   const [iv, payload] = value.split(".");
@@ -50,33 +55,27 @@ export async function decryptSecret(value?: string | null) {
   );
   return decoder.decode(clear);
 }
+
 export async function configs(request: Request) {
   const user = await requireRequestUser(request);
-  const rows = await getDb()
-    .select()
-    .from(mcpServers)
-    .where(eq(mcpServers.userId, user.id));
+  const row = (
+    await getDb()
+      .select()
+      .from(mcpServers)
+      .where(eq(mcpServers.userId, user.id))
+  ).find((item) => item.providerKey === "flyai");
   const defaults = providerDefaults();
-  const merged: Record<string, McpServerConfig> = { ...defaults };
-  for (const row of rows) {
-    const secret = await decryptSecret(row.encryptedSecret);
-    merged[row.providerKey] = {
-      id: row.providerKey,
-      name:
-        row.source === "builtin" && defaults[row.providerKey]
-          ? defaults[row.providerKey].name
-          : row.name,
-      endpoint: row.endpoint,
-      homepage: defaults[row.providerKey]?.homepage,
-      authMode: row.authMode as McpServerConfig["authMode"],
-      apiKey: row.authMode === "bearer" ? secret : undefined,
-      authHeader: row.authMode === "authorization" ? secret : undefined,
+  if (!row) return defaults;
+  const secret = await decryptSecret(row.encryptedSecret);
+  return {
+    flyai: {
+      ...defaults.flyai,
+      apiKey: secret || defaults.flyai.apiKey,
       enabled: row.enabled,
       permission: row.permission as McpServerConfig["permission"],
-      source: row.source as McpServerConfig["source"],
-    };
-  }
-  return merged;
+    },
+  };
 }
+
 export const mcpRowId = (userId: string, providerKey: string) =>
   `${userId}:${providerKey}`;

@@ -169,7 +169,7 @@ export async function advanceAiJob(
           {
             kind: "system",
             status: "completed",
-            title: `已连接 MCP，发现 ${catalog.length} 个实时工具`,
+            title: `已加载 FlyAI Skill，发现 ${catalog.length} 个实时工具`,
           },
         ],
       };

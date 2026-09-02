@@ -10,7 +10,7 @@ import {
 } from "@/lib/user-preferences";
 import "./settings-product.css";
 
-type Tab = "preferences" | "ai" | "mcp" | "privacy";
+type Tab = "preferences" | "ai" | "skill" | "privacy";
 type Server = {
   id: string;
   name: string;
@@ -34,70 +34,16 @@ type Props = {
 const isDemo = process.env.NEXT_PUBLIC_DEMO_MODE === "true";
 const demoServers: Server[] = [
   {
-    id: "amap",
-    name: "高德地图",
-    endpoint: "Demo 中隐藏服务地址",
+    id: "flyai",
+    name: "FlyAI 飞猪旅行",
+    endpoint: "内置 CLI Skill",
+    homepage: "https://github.com/zjk1984/flighthub-travel-skill",
     enabled: true,
     permission: "readonly",
-    authMode: "none",
+    authMode: "bearer",
     source: "builtin",
     configured: true,
     status: "connected",
-  },
-  {
-    id: "searxng",
-    name: "SearXNG 搜索",
-    endpoint: "Demo 中隐藏服务地址",
-    enabled: true,
-    permission: "readonly",
-    authMode: "none",
-    source: "builtin",
-    configured: true,
-    status: "connected",
-  },
-  {
-    id: "dida",
-    name: "RollingGo 道旅酒店",
-    endpoint: "Demo 中隐藏服务地址",
-    enabled: true,
-    permission: "readonly",
-    authMode: "none",
-    source: "builtin",
-    configured: true,
-    status: "connected",
-  },
-  {
-    id: "didaFlight",
-    name: "RollingGo 道旅机票",
-    endpoint: "Demo 中隐藏服务地址",
-    enabled: false,
-    permission: "readonly",
-    authMode: "none",
-    source: "builtin",
-    configured: true,
-    status: "idle",
-  },
-  {
-    id: "rail12306",
-    name: "铁路 12306",
-    endpoint: "Demo 中隐藏服务地址",
-    enabled: false,
-    permission: "readonly",
-    authMode: "none",
-    source: "builtin",
-    configured: true,
-    status: "idle",
-  },
-  {
-    id: "tavily",
-    name: "Tavily 搜索",
-    endpoint: "Demo 中隐藏服务地址",
-    enabled: false,
-    permission: "readonly",
-    authMode: "none",
-    source: "builtin",
-    configured: true,
-    status: "idle",
   },
 ];
 const providerPresets: Record<string, { baseUrl: string; model: string }> = {
@@ -178,7 +124,7 @@ export function SettingsPanel({
         data.servers.map((server: Server) => ({ ...server, status: "idle" })),
       );
     } catch (error) {
-      onMessage(error instanceof Error ? error.message : "MCP 配置读取失败");
+      onMessage(error instanceof Error ? error.message : "Skill 配置读取失败");
     } finally {
       setLoading(false);
     }
@@ -256,52 +202,21 @@ export function SettingsPanel({
     if (!editing) return;
     setFormError("");
     try {
-      const url = new URL(editing.endpoint);
-      if (url.protocol !== "https:") throw new Error("仅允许公开 HTTPS 地址");
-      if (editing.id === "amap" && url.searchParams.has("key"))
-        throw new Error(
-          "请从 URL 中移除 key，并在下方 API Key 输入框填写，避免密钥返回前端",
-        );
       await json("/api/mcp/servers", {
         method: "PUT",
         body: JSON.stringify({
-          ...editing,
-          apiKey:
-            editing.authMode === "bearer" ? secret || undefined : undefined,
-          authHeader:
-            editing.authMode === "authorization"
-              ? secret || undefined
-              : undefined,
+          id: editing.id,
+          enabled: editing.enabled,
+          permission: editing.permission,
+          apiKey: secret || undefined,
         }),
       });
       setEditing(null);
       setSecret("");
       await load();
-      onMessage("MCP 配置已保存");
+      onMessage("Skill 配置已保存");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "保存失败");
-    }
-  };
-  const add = () =>
-    setEditing({
-      id: `custom_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
-      name: "",
-      endpoint: "",
-      enabled: true,
-      permission: "ask",
-      authMode: "none",
-      source: "custom",
-    });
-  const remove = async (server: Server) => {
-    try {
-      await json("/api/mcp/servers", {
-        method: "DELETE",
-        body: JSON.stringify({ id: server.id }),
-      });
-      setServers((rows) => rows.filter((row) => row.id !== server.id));
-      onMessage("自定义 MCP 已删除");
-    } catch (error) {
-      onMessage(error instanceof Error ? error.message : "删除失败");
     }
   };
   const saveAi = async () => {
@@ -431,13 +346,13 @@ export function SettingsPanel({
             </span>
           </button>
           <button
-            className={tab === "mcp" ? "active" : ""}
-            onClick={() => setTab("mcp")}
+            className={tab === "skill" ? "active" : ""}
+            onClick={() => setTab("skill")}
           >
             <i>链</i>
             <span>
-              <b>MCP 服务</b>
-              <small>地图、搜索与预订</small>
+              <b>旅行 Skill</b>
+              <small>机票、酒店、景点与火车票</small>
             </span>
           </button>
           <button
@@ -609,16 +524,15 @@ export function SettingsPanel({
               </div>
             </section>
           )}
-          {tab === "mcp" && (
+          {tab === "skill" && (
             <section className="settings-card">
               <div className="card-title">
                 <div>
-                  <h2>实时数据服务</h2>
-                  <p>每个服务都可以更改 URL、认证方式和权限。</p>
+                  <h2>FlyAI 旅行 Skill</h2>
+                  <p>
+                    基于飞猪 MCP 的本地 CLI Skill，提供机票、酒店、景点、火车票等实时查询。
+                  </p>
                 </div>
-                <button className="accent" onClick={add}>
-                  ＋ 新增服务
-                </button>
               </div>
               {loading ? (
                 <div className="connector-empty">正在读取服务配置…</div>
@@ -632,35 +546,27 @@ export function SettingsPanel({
                           <b>{server.name}</b>
                           {server.source === "builtin" && <small>内置</small>}
                         </span>
-                        <code className={server.endpoint ? "" : "unconfigured"}>
-                          {server.endpoint || "未配置 Streamable HTTP URL"}
-                        </code>
+                        <code>{server.endpoint || "内置 CLI Skill"}</code>
                         <p className={server.status === "error" ? "error" : ""}>
                           {server.status === "testing"
-                            ? "正在连接真实服务…"
+                            ? "正在检测 Skill 工具…"
                             : server.status === "connected"
                               ? "连接正常"
                               : server.status === "error"
                                 ? server.error
-                                : `${server.authMode === "none" ? "无认证" : server.secretHint || "需要凭证"} · ${server.permission === "readonly" ? "允许只读" : server.permission === "ask" ? "每次询问" : "禁止"}`}
+                                : `${server.secretHint ? `API Key ${server.secretHint}` : "无 API Key（可试用）"} · ${server.permission === "readonly" ? "允许只读" : server.permission === "ask" ? "每次询问" : "禁止"}`}
                         </p>
                       </div>
                       <label className="modern-switch">
                         <input
                           type="checkbox"
                           checked={server.enabled}
-                          disabled={!server.endpoint}
                           onChange={(e) => saveToggle(server, e.target.checked)}
                         />
                         <i></i>
                       </label>
                       <div className="connector-actions">
-                        <button
-                          disabled={!server.endpoint}
-                          onClick={() => test(server)}
-                        >
-                          测试
-                        </button>
+                        <button onClick={() => test(server)}>测试</button>
                         <button
                           onClick={() => {
                             setEditing(server);
@@ -678,14 +584,6 @@ export function SettingsPanel({
                           >
                             项目主页
                           </a>
-                        )}
-                        {server.source === "custom" && (
-                          <button
-                            className="danger"
-                            onClick={() => remove(server)}
-                          >
-                            删除
-                          </button>
                         )}
                       </div>
                     </article>
@@ -723,7 +621,7 @@ export function SettingsPanel({
               <div className="preference-row danger-row">
                 <div>
                   <b>删除全部数据</b>
-                  <small>同时删除行程、AI 配置、MCP 配置与设备旅行偏好</small>
+                  <small>同时删除行程、AI 配置、Skill 配置与设备旅行偏好</small>
                 </div>
                 <button onClick={() => setDeleteScope("all")}>删除</button>
               </div>
@@ -741,50 +639,14 @@ export function SettingsPanel({
             >
               <header>
                 <div>
-                  <h2>
-                    {editing.source === "custom" &&
-                    !servers.some((s) => s.id === editing.id)
-                      ? "新增 MCP 服务"
-                      : "配置 MCP 服务"}
-                  </h2>
+                  <h2>配置 FlyAI Skill</h2>
                 </div>
                 <button onClick={() => setEditing(null)}>×</button>
               </header>
-              <label>
-                服务名称
-                <input
-                  value={editing.name}
-                  onChange={(e) =>
-                    setEditing({ ...editing, name: e.target.value })
-                  }
-                />
-              </label>
-              <label>
-                Streamable HTTP URL
-                <input
-                  value={editing.endpoint}
-                  onChange={(e) =>
-                    setEditing({ ...editing, endpoint: e.target.value })
-                  }
-                  placeholder="https://example.com/mcp"
-                />
-              </label>
+              <p className="modal-note">
+                FLYAI_API_KEY 为可选增强凭证；留空也可试用基础查询能力。
+              </p>
               <div className="modal-two">
-                <ChoiceField
-                  label="认证方式"
-                  value={editing.authMode}
-                  options={[
-                    { value: "none", label: "无认证" },
-                    { value: "bearer", label: "Bearer Token" },
-                    { value: "authorization", label: "自定义 Authorization" },
-                  ]}
-                  onChange={(authMode) =>
-                    setEditing({
-                      ...editing,
-                      authMode: authMode as Server["authMode"],
-                    })
-                  }
-                />
                 <ChoiceField
                   label="调用权限"
                   value={editing.permission}
@@ -801,28 +663,20 @@ export function SettingsPanel({
                   }
                 />
               </div>
-              {editing.authMode !== "none" && (
-                <label>
-                  {editing.authMode === "bearer"
-                    ? "Bearer Token"
-                    : "Authorization 值"}
-                  <input
-                    type="password"
-                    value={secret}
-                    onChange={(e) => setSecret(e.target.value)}
-                    placeholder={editing.secretHint || "留空则保留现有凭证"}
-                    autoComplete="new-password"
-                  />
-                </label>
-              )}
+              <label>
+                FLYAI API Key（可选）
+                <input
+                  type="password"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  placeholder={editing.secretHint || "留空则保留现有凭证"}
+                  autoComplete="new-password"
+                />
+              </label>
               {formError && <p className="form-error">⚠ {formError}</p>}
               <footer>
                 <button onClick={() => setEditing(null)}>取消</button>
-                <button
-                  className="accent"
-                  disabled={!editing.name.trim() || !editing.endpoint.trim()}
-                  onClick={save}
-                >
+                <button className="accent" onClick={save}>
                   保存配置
                 </button>
               </footer>
