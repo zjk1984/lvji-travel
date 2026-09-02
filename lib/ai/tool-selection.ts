@@ -8,15 +8,11 @@ type ToolCatalogItem = {
 const categoryRules: Array<{ task: RegExp; tool: RegExp }> = [
   {
     task: /酒店|住宿|民宿|入住|退房|hotel|lodg/i,
-    tool: /酒店|hotel|lodg/i,
+    tool: /search-hotel|hotel/i,
   },
   {
     task: /航班|飞机|机场|机票|flight|airport/i,
-    tool: /航班|飞机|机场|flight|airport/i,
-  },
-  {
-    task: /火车|高铁|动车|车票|铁路|train|rail|ticket/i,
-    tool: /火车|高铁|动车|车票|铁路|train|rail|ticket/i,
+    tool: /search-flight|flight/i,
   },
   {
     task: /景点|行程|旅行|旅游|规划|攻略|介绍|历史|人文|attraction|itinerary|travel|guide/i,

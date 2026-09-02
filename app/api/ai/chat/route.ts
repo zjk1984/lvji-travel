@@ -6,6 +6,7 @@ import { requireRequestUser } from "@/lib/auth/request-user";
 import { callTool, discoverTools } from "@/lib/mcp/gateway";
 import { assertSafeMcpUrl } from "@/lib/mcp/security";
 import { configs, decryptSecret } from "@/lib/mcp/store";
+import { isSkillProvider } from "@/lib/mcp/registry";
 import type { McpServerConfig, McpTool } from "@/lib/mcp/types";
 import { tripOperationSchema } from "@/lib/trips/operations";
 import { loadTrip } from "@/lib/trips/serialize";
@@ -64,7 +65,7 @@ async function modelCall(base: string, key: string, model: string, messages: Cha
 }
 
 async function availableMcp(request: Request) {
-  const all = await configs(request); const entries: Array<{ alias: string; config: McpServerConfig; tool: McpTool }> = []; const enabled = Object.values(all).filter(item => item.enabled && item.permission !== "deny" && item.endpoint);
+  const all = await configs(request); const entries: Array<{ alias: string; config: McpServerConfig; tool: McpTool }> = []; const enabled = Object.values(all).filter(item => item.enabled && item.permission !== "deny" && (isSkillProvider(item.id) || item.endpoint));
   const discovered = await Promise.allSettled(enabled.map(async config => ({ config, tools: await discoverTools(config) })));
   for (const result of discovered) { if (result.status !== "fulfilled") continue; for (const tool of result.value.tools.slice(0, 12)) { entries.push({ alias: `mcp_${entries.length}`, config: result.value.config, tool }); if (entries.length >= 30) return entries; } }
   return entries;

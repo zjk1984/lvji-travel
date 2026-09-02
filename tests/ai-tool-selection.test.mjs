@@ -13,22 +13,22 @@ const catalog = [
     description: "步行路线",
   },
   {
-    alias: "mcp_hotel",
-    providerName: "RollingGo",
-    toolName: "searchHotels",
+    alias: "skill_hotel",
+    providerName: "FlyAI 飞猪旅行",
+    toolName: "search-hotel",
     description: "Search hotels",
   },
   {
-    alias: "mcp_flight",
-    providerName: "RollingGo",
-    toolName: "searchFlights",
+    alias: "skill_flight",
+    providerName: "FlyAI 飞猪旅行",
+    toolName: "search-flight",
     description: "Search flights",
   },
   {
     alias: "mcp_web",
-    providerName: "SearXNG",
-    toolName: "searxng_web_search",
-    description: "聚合网页搜索",
+    providerName: "Tavily 搜索",
+    toolName: "tavily-search",
+    description: "实时网页搜索",
   },
 ];
 
@@ -39,11 +39,11 @@ test("always keeps core map tools and only loads requested travel categories", (
   );
   assert.deepEqual(
     selectRelevantTools(catalog, "规划苏州行程并安排酒店").map((x) => x.alias),
-    ["mcp_map", "mcp_hotel", "mcp_web"],
+    ["mcp_map", "skill_hotel", "mcp_web"],
   );
   assert.deepEqual(
     selectRelevantTools(catalog, "规划行程并查询航班").map((x) => x.alias),
-    ["mcp_map", "mcp_flight", "mcp_web"],
+    ["mcp_map", "skill_flight", "mcp_web"],
   );
 });
 
