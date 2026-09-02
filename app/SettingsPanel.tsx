@@ -36,7 +36,7 @@ const demoServers: Server[] = [
   {
     id: "flyai",
     name: "FlyAI 飞猪旅行",
-    endpoint: "内置 CLI Skill",
+    endpoint: "内置 CLI Skill · 机票/酒店",
     homepage: "https://github.com/zjk1984/flighthub-travel-skill",
     enabled: true,
     permission: "readonly",
@@ -44,6 +44,39 @@ const demoServers: Server[] = [
     source: "builtin",
     configured: true,
     status: "connected",
+  },
+  {
+    id: "amap",
+    name: "高德地图",
+    endpoint: "Demo 中隐藏服务地址",
+    enabled: true,
+    permission: "readonly",
+    authMode: "none",
+    source: "builtin",
+    configured: true,
+    status: "connected",
+  },
+  {
+    id: "tavily",
+    name: "Tavily 搜索",
+    endpoint: "Demo 中隐藏服务地址",
+    enabled: true,
+    permission: "readonly",
+    authMode: "none",
+    source: "builtin",
+    configured: true,
+    status: "connected",
+  },
+  {
+    id: "searxng",
+    name: "SearXNG 搜索",
+    endpoint: "Demo 中隐藏服务地址",
+    enabled: false,
+    permission: "readonly",
+    authMode: "none",
+    source: "builtin",
+    configured: true,
+    status: "idle",
   },
 ];
 const providerPresets: Record<string, { baseUrl: string; model: string }> = {
@@ -202,19 +235,41 @@ export function SettingsPanel({
     if (!editing) return;
     setFormError("");
     try {
-      await json("/api/mcp/servers", {
-        method: "PUT",
-        body: JSON.stringify({
-          id: editing.id,
-          enabled: editing.enabled,
-          permission: editing.permission,
-          apiKey: secret || undefined,
-        }),
-      });
+      if (editing.id === "flyai") {
+        await json("/api/mcp/servers", {
+          method: "PUT",
+          body: JSON.stringify({
+            id: editing.id,
+            enabled: editing.enabled,
+            permission: editing.permission,
+            apiKey: secret || undefined,
+          }),
+        });
+      } else {
+        const url = new URL(editing.endpoint);
+        if (url.protocol !== "https:") throw new Error("仅允许公开 HTTPS 地址");
+        if (editing.id === "amap" && url.searchParams.has("key")) {
+          throw new Error(
+            "请从 URL 中移除 key，并在下方 API Key 输入框填写，避免密钥返回前端",
+          );
+        }
+        await json("/api/mcp/servers", {
+          method: "PUT",
+          body: JSON.stringify({
+            ...editing,
+            apiKey:
+              editing.authMode === "bearer" ? secret || undefined : undefined,
+            authHeader:
+              editing.authMode === "authorization"
+                ? secret || undefined
+                : undefined,
+          }),
+        });
+      }
       setEditing(null);
       setSecret("");
       await load();
-      onMessage("Skill 配置已保存");
+      onMessage("配置已保存");
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "保存失败");
     }
@@ -351,8 +406,8 @@ export function SettingsPanel({
           >
             <i>链</i>
             <span>
-              <b>旅行 Skill</b>
-              <small>机票、酒店、景点与火车票</small>
+              <b>实时工具</b>
+              <small>地图、天气、网页与机票酒店</small>
             </span>
           </button>
           <button
@@ -528,9 +583,9 @@ export function SettingsPanel({
             <section className="settings-card">
               <div className="card-title">
                 <div>
-                  <h2>FlyAI 旅行 Skill</h2>
+                  <h2>实时数据服务</h2>
                   <p>
-                    基于飞猪 MCP 的本地 CLI Skill，提供机票、酒店、景点、火车票等实时查询。
+                    FlyAI Skill 负责机票与酒店；高德、Tavily、SearXNG 负责地图、天气与网页搜索。
                   </p>
                 </div>
               </div>
@@ -546,27 +601,42 @@ export function SettingsPanel({
                           <b>{server.name}</b>
                           {server.source === "builtin" && <small>内置</small>}
                         </span>
-                        <code>{server.endpoint || "内置 CLI Skill"}</code>
+                        <code className={server.configured === false ? "unconfigured" : ""}>
+                          {server.endpoint ||
+                            (server.id === "flyai"
+                              ? "内置 CLI Skill"
+                              : "未配置 Streamable HTTP URL")}
+                        </code>
                         <p className={server.status === "error" ? "error" : ""}>
                           {server.status === "testing"
-                            ? "正在检测 Skill 工具…"
+                            ? server.id === "flyai"
+                              ? "正在检测 Skill 工具…"
+                              : "正在连接 MCP 服务…"
                             : server.status === "connected"
                               ? "连接正常"
                               : server.status === "error"
                                 ? server.error
-                                : `${server.secretHint ? `API Key ${server.secretHint}` : "无 API Key（可试用）"} · ${server.permission === "readonly" ? "允许只读" : server.permission === "ask" ? "每次询问" : "禁止"}`}
+                                : server.id === "flyai"
+                                  ? `${server.secretHint ? `API Key ${server.secretHint}` : "无 API Key（可试用）"} · ${server.permission === "readonly" ? "允许只读" : server.permission === "ask" ? "每次询问" : "禁止"}`
+                                  : `${server.authMode === "none" ? "无认证" : server.secretHint || "需要凭证"} · ${server.permission === "readonly" ? "允许只读" : server.permission === "ask" ? "每次询问" : "禁止"}`}
                         </p>
                       </div>
                       <label className="modern-switch">
                         <input
                           type="checkbox"
                           checked={server.enabled}
+                          disabled={!server.configured && server.id !== "flyai"}
                           onChange={(e) => saveToggle(server, e.target.checked)}
                         />
                         <i></i>
                       </label>
                       <div className="connector-actions">
-                        <button onClick={() => test(server)}>测试</button>
+                        <button
+                          disabled={!server.configured && server.id !== "flyai"}
+                          onClick={() => test(server)}
+                        >
+                          测试
+                        </button>
                         <button
                           onClick={() => {
                             setEditing(server);
@@ -639,44 +709,128 @@ export function SettingsPanel({
             >
               <header>
                 <div>
-                  <h2>配置 FlyAI Skill</h2>
+                  <h2>
+                    {editing.id === "flyai"
+                      ? "配置 FlyAI Skill"
+                      : "配置 MCP 服务"}
+                  </h2>
                 </div>
                 <button onClick={() => setEditing(null)}>×</button>
               </header>
-              <p className="modal-note">
-                FLYAI_API_KEY 为可选增强凭证；留空也可试用基础查询能力。
-              </p>
-              <div className="modal-two">
-                <ChoiceField
-                  label="调用权限"
-                  value={editing.permission}
-                  options={[
-                    { value: "readonly", label: "允许只读" },
-                    { value: "ask", label: "每次询问" },
-                    { value: "deny", label: "禁止" },
-                  ]}
-                  onChange={(permission) =>
-                    setEditing({
-                      ...editing,
-                      permission: permission as Server["permission"],
-                    })
-                  }
-                />
-              </div>
-              <label>
-                FLYAI API Key（可选）
-                <input
-                  type="password"
-                  value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
-                  placeholder={editing.secretHint || "留空则保留现有凭证"}
-                  autoComplete="new-password"
-                />
-              </label>
+              {editing.id === "flyai" ? (
+                <>
+                  <p className="modal-note">
+                    FlyAI 仅提供机票与酒店查询。FLYAI_API_KEY 为可选增强凭证。
+                  </p>
+                  <div className="modal-two">
+                    <ChoiceField
+                      label="调用权限"
+                      value={editing.permission}
+                      options={[
+                        { value: "readonly", label: "允许只读" },
+                        { value: "ask", label: "每次询问" },
+                        { value: "deny", label: "禁止" },
+                      ]}
+                      onChange={(permission) =>
+                        setEditing({
+                          ...editing,
+                          permission: permission as Server["permission"],
+                        })
+                      }
+                    />
+                  </div>
+                  <label>
+                    FLYAI API Key（可选）
+                    <input
+                      type="password"
+                      value={secret}
+                      onChange={(e) => setSecret(e.target.value)}
+                      placeholder={editing.secretHint || "留空则保留现有凭证"}
+                      autoComplete="new-password"
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    服务名称
+                    <input
+                      value={editing.name}
+                      onChange={(e) =>
+                        setEditing({ ...editing, name: e.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Streamable HTTP URL
+                    <input
+                      value={editing.endpoint}
+                      onChange={(e) =>
+                        setEditing({ ...editing, endpoint: e.target.value })
+                      }
+                      placeholder="https://example.com/mcp"
+                    />
+                  </label>
+                  <div className="modal-two">
+                    <ChoiceField
+                      label="认证方式"
+                      value={editing.authMode}
+                      options={[
+                        { value: "none", label: "无认证" },
+                        { value: "bearer", label: "Bearer Token" },
+                        { value: "authorization", label: "自定义 Authorization" },
+                      ]}
+                      onChange={(authMode) =>
+                        setEditing({
+                          ...editing,
+                          authMode: authMode as Server["authMode"],
+                        })
+                      }
+                    />
+                    <ChoiceField
+                      label="调用权限"
+                      value={editing.permission}
+                      options={[
+                        { value: "readonly", label: "允许只读" },
+                        { value: "ask", label: "每次询问" },
+                        { value: "deny", label: "禁止" },
+                      ]}
+                      onChange={(permission) =>
+                        setEditing({
+                          ...editing,
+                          permission: permission as Server["permission"],
+                        })
+                      }
+                    />
+                  </div>
+                  {editing.authMode !== "none" && (
+                    <label>
+                      {editing.authMode === "bearer"
+                        ? "Bearer Token"
+                        : "Authorization 值"}
+                      <input
+                        type="password"
+                        value={secret}
+                        onChange={(e) => setSecret(e.target.value)}
+                        placeholder={editing.secretHint || "留空则保留现有凭证"}
+                        autoComplete="new-password"
+                      />
+                    </label>
+                  )}
+                </>
+              )}
               {formError && <p className="form-error">⚠ {formError}</p>}
               <footer>
                 <button onClick={() => setEditing(null)}>取消</button>
-                <button className="accent" onClick={save}>
+                <button
+                  className="accent"
+                  disabled={
+                    editing.id === "flyai"
+                      ? false
+                      : !editing.name.trim() || !editing.endpoint.trim()
+                  }
+                  onClick={save}
+                >
                   保存配置
                 </button>
               </footer>

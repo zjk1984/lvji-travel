@@ -1,5 +1,7 @@
 import { configs } from "@/lib/mcp/store";
 import { callTool } from "@/lib/mcp/gateway";
+import { isSkillProvider } from "@/lib/mcp/registry";
+import type { McpProviderId } from "@/lib/mcp/types";
 import { audit, rateLimit } from "@/lib/mcp/audit";
 
 export async function POST(
@@ -17,13 +19,8 @@ export async function POST(
       confirmed?: boolean;
     };
     tool = body.name || "unknown";
-    if (id !== "flyai") {
-      return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    }
-    const config = (await configs(request)).flyai;
-    if (!config) {
-      return Response.json({ error: "NOT_FOUND" }, { status: 404 });
-    }
+    const config = (await configs(request))[id as McpProviderId];
+    if (!config) return Response.json({ error: "NOT_FOUND" }, { status: 404 });
     if (!body.name) {
       return Response.json({ error: "TOOL_NAME_REQUIRED" }, { status: 400 });
     }
@@ -37,6 +34,9 @@ export async function POST(
       });
       return Response.json({ error: "CONFIRMATION_REQUIRED" }, { status: 409 });
     }
+    if (!isSkillProvider(id) && !config.endpoint) {
+      return Response.json({ error: "MCP_NOT_CONFIGURED" }, { status: 503 });
+    }
     const result = await callTool(config, body.name, body.arguments || {});
     audit({
       provider: id,
@@ -46,7 +46,7 @@ export async function POST(
     });
     return Response.json({ result });
   } catch (error) {
-    const code = error instanceof Error ? error.message : "SKILL_CALL_FAILED";
+    const code = error instanceof Error ? error.message : "SERVICE_CALL_FAILED";
     audit({
       provider: id,
       tool,

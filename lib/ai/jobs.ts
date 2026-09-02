@@ -169,7 +169,7 @@ export async function advanceAiJob(
           {
             kind: "system",
             status: "completed",
-            title: `已加载 FlyAI Skill，发现 ${catalog.length} 个实时工具`,
+            title: `已连接实时工具，发现 ${catalog.length} 个（地图/天气/网页 + FlyAI 机票酒店）`,
           },
         ],
       };

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { aiSettings } from "@/db/schema";
 import { callTool, discoverTools } from "@/lib/mcp/gateway";
+import { isSkillProvider } from "@/lib/mcp/registry";
 import { assertSafeMcpUrl } from "@/lib/mcp/security";
 import { configs, decryptSecret } from "@/lib/mcp/store";
 import { tripOperationSchema } from "@/lib/trips/operations";
@@ -745,7 +746,7 @@ export async function systemFor(
   });
   const imageTarget = Math.min(8, Math.max(2, days.length));
   if (mode === "conversation")
-    return `你是旅迹旅行规划助手，像普通 AI 助手一样与用户自然对话。可用 FlyAI 旅行 Skill 工具会在本次请求中以实时工具定义提供；只能依据实际提供的工具名称、说明、参数结构和调用结果选择及使用工具，不得假定某个服务或工具一定存在。你可以自主连续调用任意次数的可用 Skill 工具；每次获得工具结果后自行判断是否需要继续查询，不要预先固定工具清单，也不要为了凑数量调用无关工具。不得编造工具结果。${responseKind === "reply" ? "本次是直接问答：准确回答用户当前问题，不要擅自扩写成完整逐日方案，也不要要求用户确认写入。" : `本次是方案生成或调整：给出完整、可讨论的方案，并明确等待用户确认后再写入行程。排程时必须逐一检查同一天相邻地点：地点不同且需要移动时，优先从本次实际提供的工具中选择合适的路线工具，获取步行、公交或驾车耗时；在方案时间轴中单独列出交通方式、出发时间和预计耗时，并在工具耗时之外预留合理的步行进出、候车、停车或拥堵缓冲。下一项开始时间不得早于上一项结束时间加通勤与缓冲；没有合适工具或无法查询路线时必须明确标注为估算，不得假装已验证。检查已有行程时，重点找出零间隔、通勤不足和跨区域折返。查询充分后，用清晰中文给出可讨论的逐日方案、交通衔接、用餐与休息建议。${budgetGuidance}`}生成完整方案时，先选出每天最有代表性的 1–2 个核心景点。若网页搜索或网页正文工具可用，应优先联网检索这些核心景点的可靠资料，并综合地点详情与网页资料，为每个核心景点写约 150–300 字的实用介绍，至少包含历史或人文背景、最值得看的特色、推荐游览方式和一项预约/开放时间/避坑提示；不要只写一句泛泛介绍。普通景点写 50–120 字即可，餐饮、交通和休息项目保持简洁。涉及会变化的票价、开放时间或预约政策时必须以工具结果为准，无法核实时明确提示用户复核，不得编造。若地点搜索或详情工具能够返回图片，应合并查询这些核心景点的详情，目标是在全程方案中获得约 ${imageTarget} 个不同核心地点的可靠主图，而不是只给少数地点配图。工具返回与地点直接对应的公开 HTTPS 图片 URL 时，原样使用 Markdown 图片语法紧随该地点介绍展示。优先保证核心景点图片，再按推荐价值补充特色酒店、餐厅或体验图片；普通交通和休息项目无需图片。图片 URL 必须来自本轮工具结果，禁止猜测、拼接、改写或使用无关图片；每个地点最多一张主图，同一图片不得重复展示。某地点查不到可靠图片就跳过，不得反复查询或为了达到数量而阻塞方案生成。此阶段禁止输出 JSON 或 operations，也不要声称已经写入行程。当前行程：${tripData}`;
+    return `你是旅迹旅行规划助手，像普通 AI 助手一样与用户自然对话。可用工具会在本次请求中以实时工具定义提供：FlyAI Skill 负责机票与酒店查询；MCP 服务负责地图、路线、天气与网页搜索。只能依据实际提供的工具名称、说明、参数结构和调用结果选择及使用工具，不得假定某个服务或工具一定存在。你可以自主连续调用任意次数的可用工具；每次获得工具结果后自行判断是否需要继续查询，不要预先固定工具清单，也不要为了凑数量调用无关工具。不得编造工具结果。${responseKind === "reply" ? "本次是直接问答：准确回答用户当前问题，不要擅自扩写成完整逐日方案，也不要要求用户确认写入。" : `本次是方案生成或调整：给出完整、可讨论的方案，并明确等待用户确认后再写入行程。排程时必须逐一检查同一天相邻地点：地点不同且需要移动时，优先从本次实际提供的工具中选择合适的路线工具，获取步行、公交或驾车耗时；在方案时间轴中单独列出交通方式、出发时间和预计耗时，并在工具耗时之外预留合理的步行进出、候车、停车或拥堵缓冲。下一项开始时间不得早于上一项结束时间加通勤与缓冲；没有合适工具或无法查询路线时必须明确标注为估算，不得假装已验证。检查已有行程时，重点找出零间隔、通勤不足和跨区域折返。查询充分后，用清晰中文给出可讨论的逐日方案、交通衔接、用餐与休息建议。${budgetGuidance}`}生成完整方案时，先选出每天最有代表性的 1–2 个核心景点。若网页搜索或网页正文工具可用，应优先联网检索这些核心景点的可靠资料，并综合地点详情与网页资料，为每个核心景点写约 150–300 字的实用介绍，至少包含历史或人文背景、最值得看的特色、推荐游览方式和一项预约/开放时间/避坑提示；不要只写一句泛泛介绍。普通景点写 50–120 字即可，餐饮、交通和休息项目保持简洁。涉及会变化的票价、开放时间或预约政策时必须以工具结果为准，无法核实时明确提示用户复核，不得编造。若地点搜索或详情工具能够返回图片，应合并查询这些核心景点的详情，目标是在全程方案中获得约 ${imageTarget} 个不同核心地点的可靠主图，而不是只给少数地点配图。工具返回与地点直接对应的公开 HTTPS 图片 URL 时，原样使用 Markdown 图片语法紧随该地点介绍展示。优先保证核心景点图片，再按推荐价值补充特色酒店、餐厅或体验图片；普通交通和休息项目无需图片。图片 URL 必须来自本轮工具结果，禁止猜测、拼接、改写或使用无关图片；每个地点最多一张主图，同一图片不得重复展示。某地点查不到可靠图片就跳过，不得反复查询或为了达到数量而阻塞方案生成。此阶段禁止输出 JSON 或 operations，也不要声称已经写入行程。当前行程：${tripData}`;
   const empty = days.every((day) => day.items.length === 0);
   return `你是行程结构化执行器。你的主要任务不是重新思考或重新规划，而是把用户已经确认的文字方案准确转换为行程 operations。已确认方案中的日期、地点、顺序、时间、交通与取舍是权威内容；不得擅自替换地点、增加无关安排、改变节奏或重新做可行性评审。${budgetGuidance}
 工具查询只允许由重点景点的“介绍或图片缺口”驱动：
@@ -756,27 +757,51 @@ export async function systemFor(
 搜索不到补充信息就省略，不得阻塞最终生成，不得用模型记忆冒充工具结果。最终必须只输出一个合法、完整的 json 对象，禁止 Markdown、代码围栏和额外文字。json 顶层格式示例：{"message":"已生成行程变更预览","operations":[{"type":"add_item","item":{"dayId":"必须替换为当前行程中的真实 dayId","type":"景点","title":"示例地点","startTime":"09:00","durationMinutes":120,"notes":"预约、集合点等行程信息","cost":0,"sourceType":"mcp_verified","metadata":{"introduction":"地点的历史人文、特色与评价","imageUrl":"工具返回的公开 HTTPS 图片 URL"}}}]}。operations 仅允许 add_item、remove_item、update_item、move_item、update_budget；新增项目必须包含 dayId、type、title、startTime(HH:mm)、durationMinutes、notes、cost、sourceType。严格区分 notes 与 metadata.introduction：notes 只记录预约、集合点、同行人、交通衔接等行程执行信息；景点或餐厅的历史人文、特色、推荐亮点和评价写入 metadata.introduction。输出 JSON 前必须逐项检查已确认方案：凡方案中某个地点已经紧邻展示了可靠 Markdown 图片，该地点写入 add_item 或 update_item 时必须把其中的 HTTPS URL 原样复制到 metadata.imageUrl，不得遗漏；不得把图片分配给其他地点。若本阶段工具返回更直接对应的地点图片，也应原样写入。每个项目最多一张主图，同一图片不得复用。metadata.imageUrl 必须与项目直接对应并原样保留；严禁猜测、拼接或改写 URL，没有可靠图片时必须省略 imageUrl。若工具结果含 POI ID、坐标、地址、评价或来源信息，可写入对应 metadata。使用工具核验的项目 sourceType="mcp_verified"，未核验的项目 sourceType="ai_generated"。不可修改 locked=true 项目，最多40项。${empty ? `当前行程为空，必须覆盖全部 ${days.length} 天且每天至少2项。` : "对照确认方案与现有行程：保留仍需要的安排；同一安排发生变化时优先 update_item 或 move_item；确认方案已替换或不再需要的未锁定旧安排必须 remove_item；只为真正新增的安排使用 add_item，禁止重复追加。"} 当前行程：${tripData}\n已确认方案：${confirmedAnswer}`;
 }
 
-const flyaiPriority = [
-  "ai-search",
-  "keyword-search",
-  "search-poi",
-  "search-hotel",
-  "search-flight",
-  "search-train",
-  "search-marriott-hotel",
-  "search-marriott-package",
-];
-function prioritized<T extends { name: string }>(tools: T[]) {
+const priorities: Record<string, string[]> = {
+  amap: [
+    "maps_weather",
+    "maps_text_search",
+    "maps_around_search",
+    "maps_search_detail",
+    "maps_geo",
+    "maps_direction_transit_integrated",
+    "maps_direction_walking",
+    "maps_distance",
+  ],
+  flyai: ["search-hotel", "search-flight"],
+  searxng: [
+    "searxng_web_search",
+    "web_url_read",
+    "searxng_search_suggestions",
+    "searxng_instance_info",
+  ],
+  tavily: ["tavily-search", "tavily-extract"],
+};
+function prioritized<T extends { name: string }>(provider: string, tools: T[]) {
+  const key = provider.toLowerCase();
+  const order =
+    key.includes("高德") || key.includes("amap")
+      ? priorities.amap
+      : key.includes("flyai") || key.includes("飞猪")
+        ? priorities.flyai
+        : key.includes("searx")
+          ? priorities.searxng
+          : key.includes("tavily")
+            ? priorities.tavily
+            : [];
   return [...tools].sort((a, b) => {
-    const ai = flyaiPriority.indexOf(a.name);
-    const bi = flyaiPriority.indexOf(b.name);
+    const ai = order.indexOf(a.name);
+    const bi = order.indexOf(b.name);
     return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
   });
 }
 export async function discover(request: Request) {
   const all = await configs(request);
   const enabled = Object.values(all).filter(
-    (c) => c.enabled && c.permission !== "deny",
+    (c) =>
+      c.enabled &&
+      c.permission !== "deny" &&
+      (isSkillProvider(c.id) || c.endpoint),
   );
   const results = await Promise.race([
     Promise.allSettled(
@@ -801,7 +826,10 @@ export async function discover(request: Request) {
   const catalog: CatalogItem[] = [];
   for (const result of results)
     if (result.status === "fulfilled")
-      for (const tool of prioritized(result.value.tools).slice(0, 8))
+      for (const tool of prioritized(
+        result.value.config.name,
+        result.value.tools,
+      ).slice(0, 8))
         catalog.push({
           alias: `mcp_${catalog.length}`,
           providerId: result.value.config.id,

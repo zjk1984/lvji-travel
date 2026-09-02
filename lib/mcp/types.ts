@@ -16,7 +16,7 @@ export type McpServerConfig = {
 export type PublicMcpServer = Omit<McpServerConfig, "apiKey" | "authHeader"> & {
   configured: boolean;
   secretHint: string | null;
-  transport: "cli";
+  transport: "cli" | "streamable-http";
   tools?: number;
   lastError?: string;
 };

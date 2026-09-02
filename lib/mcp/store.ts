@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { mcpServers } from "@/db/schema";
 import { requireRequestUser } from "@/lib/auth/request-user";
-import { providerDefaults } from "./registry";
+import { isSkillProvider, providerDefaults } from "./registry";
 import type { McpServerConfig } from "./types";
 
 const encoder = new TextEncoder();
@@ -58,23 +58,33 @@ export async function decryptSecret(value?: string | null) {
 
 export async function configs(request: Request) {
   const user = await requireRequestUser(request);
-  const row = (
-    await getDb()
-      .select()
-      .from(mcpServers)
-      .where(eq(mcpServers.userId, user.id))
-  ).find((item) => item.providerKey === "flyai");
+  const rows = await getDb()
+    .select()
+    .from(mcpServers)
+    .where(eq(mcpServers.userId, user.id));
   const defaults = providerDefaults();
-  if (!row) return defaults;
-  const secret = await decryptSecret(row.encryptedSecret);
-  return {
-    flyai: {
-      ...defaults.flyai,
-      apiKey: secret || defaults.flyai.apiKey,
+  const merged: Record<string, McpServerConfig> = { ...defaults };
+  for (const row of rows) {
+    const secret = await decryptSecret(row.encryptedSecret);
+    merged[row.providerKey] = {
+      id: row.providerKey,
+      name:
+        row.source === "builtin" && defaults[row.providerKey]
+          ? defaults[row.providerKey].name
+          : row.name,
+      endpoint: isSkillProvider(row.providerKey)
+        ? defaults.flyai.endpoint
+        : row.endpoint,
+      homepage: defaults[row.providerKey]?.homepage,
+      authMode: row.authMode as McpServerConfig["authMode"],
+      apiKey: row.authMode === "bearer" ? secret : undefined,
+      authHeader: row.authMode === "authorization" ? secret : undefined,
       enabled: row.enabled,
       permission: row.permission as McpServerConfig["permission"],
-    },
-  };
+      source: row.source as McpServerConfig["source"],
+    };
+  }
+  return merged;
 }
 
 export const mcpRowId = (userId: string, providerKey: string) =>
